@@ -3,6 +3,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from dataset import UnLearningData
 import numpy as np
+from utils import *
 
 
 def UnlearnerLoss(output, labels, full_teacher_logits, unlearn_teacher_logits, KL_temperature):
@@ -36,9 +37,35 @@ def unlearning_step(model, unlearning_teacher, full_trained_teacher, unlearn_dat
     return np.mean(losses)
 
 
+def fit_one_unlearning_cycle(epochs,  model, train_loader, val_loader, lr, device):
+    history = []
+    
+    optimizer = torch.optim.Adam(model.parameters(), lr = lr)
+
+    
+    for epoch in range(epochs): 
+        model.train()
+        train_losses = []
+        lrs = []
+        for batch in train_loader:
+            loss = training_step(model, batch, device)
+            train_losses.append(loss)
+            loss.backward()
+            
+            optimizer.step()
+            optimizer.zero_grad()
+            
+            lrs.append(get_lr(optimizer))
+            
+        result = evaluate(model, val_loader, device)
+        result['train_loss'] = torch.stack(train_losses).mean().item()
+        result['lrs'] = lrs
+        epoch_end(model, epoch, result)
+        history.append(result)
+    return history
 
 
-def UnLearner(model, unlearning_teacher, full_trained_teacher, retain_data, forget_data, epochs = 10,
+def blindspot_unlearner(model, unlearning_teacher, full_trained_teacher, retain_data, forget_data, epochs = 10,
                 optimizer = 'adam', lr = 0.01, batch_size = 256, num_workers = 32, 
                 device = 'cuda', KL_temperature = 1):
     # creating the unlearning dataset.
@@ -60,3 +87,6 @@ def UnLearner(model, unlearning_teacher, full_trained_teacher, retain_data, forg
                         full_trained_teacher=full_trained_teacher, unlearn_data_loader=unlearning_loader, 
                         optimizer=optimizer, device=device, KL_temperature=KL_temperature)
         print("Epoch {} Unlearning Loss {}".format(epoch+1, loss))
+        
+        
+        
