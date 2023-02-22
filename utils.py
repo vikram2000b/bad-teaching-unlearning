@@ -1,21 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torchvision import transforms
 
-
-
-transform_train = transforms.Compose([
-    transforms.Resize(224),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
-
-transform_test = transforms.Compose([
-    transforms.Resize(224),
-    transforms.ToTensor(),
-    transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-])
 
 def accuracy(outputs, labels):
     _, preds = torch.max(outputs, dim=1)
@@ -59,16 +45,18 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def fit_one_cycle(epochs,  model, train_loader, val_loader, device):
+def fit_one_cycle(epochs,  model, train_loader, val_loader, device, pretrained_lr=0.001, finetune_lr=0.01):
     torch.cuda.empty_cache()
     history = []
     
-    
-    param_groups = [
-        {'params':model.base.parameters(),'lr':.0001},
-        {'params':model.final.parameters(),'lr':.001}
-    ]
-    optimizer = torch.optim.Adam(param_groups)
+    try:
+        param_groups = [
+            {'params':model.base.parameters(),'lr':pretrained_lr},
+            {'params':model.final.parameters(),'lr':finetune_lr}
+        ]
+        optimizer = torch.optim.Adam(param_groups)
+    except:
+        optimizer = torch.optim.Adam(model.parameters(), finetune_lr)
 
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)
     
