@@ -49,8 +49,8 @@ def fit_one_unlearning_cycle(epochs,  model, train_loader, val_loader, lr, devic
         lrs = []
         for batch in train_loader:
             loss = training_step(model, batch, device)
-            train_losses.append(loss)
             loss.backward()
+            train_losses.append(loss.detach().cpu())
             
             optimizer.step()
             optimizer.zero_grad()
@@ -58,12 +58,11 @@ def fit_one_unlearning_cycle(epochs,  model, train_loader, val_loader, lr, devic
             lrs.append(get_lr(optimizer))
             
         result = evaluate(model, val_loader, device)
-        result['train_loss'] = torch.stack(train_losses).mean().item()
+        result['train_loss'] = torch.stack(train_losses).mean()
         result['lrs'] = lrs
         epoch_end(model, epoch, result)
         history.append(result)
     return history
-
 
 def blindspot_unlearner(model, unlearning_teacher, full_trained_teacher, retain_data, forget_data, epochs = 10,
                 optimizer = 'adam', lr = 0.01, batch_size = 256, num_workers = 32, 
@@ -89,4 +88,45 @@ def blindspot_unlearner(model, unlearning_teacher, full_trained_teacher, retain_
         print("Epoch {} Unlearning Loss {}".format(epoch+1, loss))
         
         
+   
+class UNSIR_noise(torch.nn.Module):
+    def __init__(self, *dim):
+        super().__init__()
+        self.noise = torch.nn.Parameter(torch.randn(*dim), requires_grad = True)
         
+    def forward(self):
+        return self.noise
+    
+def UNSIR_noise_train(noise, model, forget_class_label, num_epochs, noise_batch_size, device='cuda'):
+    opt = torch.optim.Adam(noise.parameters(), lr = 0.1)
+  
+    for epoch in range(num_epochs):
+        total_loss = []
+        inputs = noise()
+        labels = torch.zeros(noise_batch_size).to(device)+forget_class_label
+        outputs = model(inputs)
+        loss = -F.cross_entropy(outputs, labels.long()) + 0.1*torch.mean(torch.sum(inputs**2, [1, 2, 3]))
+        opt.zero_grad()
+        loss.backward()
+        opt.step()
+        total_loss.append(loss.cpu().detach().numpy())
+        if epoch%5 == 0:
+            print("Loss: {}".format(np.mean(total_loss)))
+            
+    return noise
+
+def UNSIR_create_noisy_loader(noise, forget_class_label, retain_samples, batch_size, num_noise_batches=20, device='cuda'):
+    
+    noisy_data = []
+    for i in range(num_noise_batches):
+        batch = noise().cuda().detach()
+        for i in range(batch[0].size(0)):
+            noisy_data.append((batch[i], torch.tensor(forget_class_label)))
+
+    other_samples = []
+    for i in range(len(retain_samples)):
+        other_samples.append((retain_samples[i][0].cpu(), torch.tensor(retain_samples[i][1])))
+    noisy_data += other_samples
+    noisy_loader = torch.utils.data.DataLoader(noisy_data, batch_size=batch_size, shuffle = True)
+    
+    return noisy_loader
