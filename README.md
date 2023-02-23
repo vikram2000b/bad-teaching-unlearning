@@ -7,6 +7,7 @@ By Vikram S Chundawat, Ayush K Tarun, Murari Mandal, Mohan Kankanhalli
 Unlearning Methods Supported:
 1. Blindspot Unlearning (presented in this work)
 2. Amnesiac Unlearning [presented as Unlearning in Graves, Nagisetty, and Ganesh 2021 (https://ojs.aaai.org/index.php/AAAI/article/view/17371/17178)]
+3. UNSIR [presented as in Tarun et al. 2021 (https://arxiv.org/pdf/2111.08947.pdf)]
 
 Models supported:
 1. ResNet18
